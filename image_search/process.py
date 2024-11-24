@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from tqdm import tqdm
 
+from image import get_predominant_color
 from model import TextModel, VisionModel, PromptGenerator
 from db import ImageDBService
 
@@ -45,8 +46,8 @@ class ProcessImages:
         return response.split("\n")[0]
 
 
-    def process_image(self, img_path: str) -> dict:
-        img_desc = self.vlm.run(img_path)
+    def process_image(self, image_path: str) -> dict:
+        img_desc = self.vlm.run(image_path)
         
         prompt = PromptGenerator(img_desc)
         title = self.llm.run(prompt.title_generation_prompt())
@@ -56,14 +57,16 @@ class ProcessImages:
 
         results = {
             "id": str(uuid.uuid4()),
-            "full_path": img_path,
-            "base_dir": "/".join(img_path.split("/")[:-1]),
-            "file_name": img_path.split("/")[-1],
-            "file_type": img_path.split(".")[-1],
+            "full_path": image_path,
+            "base_dir": "/".join(image_path.split("/")[:-1]),
+            "file_name": image_path.split("/")[-1],
+            "file_type": image_path.split(".")[-1],
             "long_desc": img_desc,
             "short_desc": self.clean_response(summary),
             "keywords": self.clean_response(keywords),
+            "image_classification": self.clean_response(keywords).split(",")[0],
             "title": self.clean_response(title),
+            "predominant_color": get_predominant_color(image_path),
         }
 
         classification = self.get_classification(classification_response)

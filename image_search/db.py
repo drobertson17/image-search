@@ -25,6 +25,7 @@ class ImageDescription(Base):
     keywords = Column(String)
     title = Column(String)
     image_classification = Column(String)
+    predominant_color = Column(String)
     natural_landscape = Column(Boolean, default=False)
     building_structure = Column(Boolean, default=False)
     selfie = Column(Boolean, default=False)
