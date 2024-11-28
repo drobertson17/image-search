@@ -2,7 +2,21 @@ import numpy as np
 import webcolors
 from PIL import Image
 from sklearn.cluster import KMeans
+from io import BytesIO
+import base64
 
+def prepare_image_for_vlm(image_path: str, pixel_limit: int = 999) -> str:
+    with Image.open(image_path) as img:
+        buffered = BytesIO()
+        width, height = img.size    # in pixels
+        if max(width, height) > pixel_limit:
+            shrink_factor = pixel_limit/max(width, height)
+            img = img.resize((
+                int(img.width * shrink_factor),
+                int(img.height * shrink_factor)
+            ))
+        img.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 def rgb_to_color_name(color):
     # Get a list of all webcolor names

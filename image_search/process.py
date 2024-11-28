@@ -5,21 +5,28 @@ from dotenv import load_dotenv
 
 from tqdm import tqdm
 
-from image import get_predominant_color
-from model import TextModel, VisionModel, PromptGenerator
+import prompts
+from bedrock import BedrockLlamaMultiModeVLM, BedrockLlamaTextLLM
 from db import ImageDBService
+from image import get_predominant_color
+from local_models import TextModel, VisionModel
 
 
 load_dotenv()
 
 
 class ProcessImages:
-    def __init__(self):
+    def __init__(self, local_mode: bool = True):
         self.directory = os.getenv("DIR_TO_PROCESS")
         self.db = ImageDBService()
-        self.vlm = VisionModel()
-        self.llm = TextModel()
-        self.valid_file_types = ["jpg", "jpeg"]
+        if local_mode:
+            self.vlm = VisionModel()
+            self.llm = TextModel()
+        else:
+            self.vlm = BedrockLlamaMultiModeVLM()
+            self.llm_1 = TextModel()
+            self.llm_2 = BedrockLlamaTextLLM()
+        self.valid_file_types = ["jpg", "jpeg", "png"]
 
     def build_file_list(self):
         self.files = []
@@ -37,7 +44,13 @@ class ProcessImages:
         }
 
         match = re.search(r'\d', llm_response)
-        if match:
+
+        if not match:
+            # No match found
+            return
+        
+        if match.group(0) != "5":
+            # Positively classified as "no match"
             return col_mapping[match.group(0)]
 
 
@@ -47,13 +60,18 @@ class ProcessImages:
 
 
     def process_image(self, image_path: str) -> dict:
-        img_desc = self.vlm.run(image_path)
+        request = prompts.RequestData(
+            system=prompts.IMAGE_DESC_SYSTEM_PROMPT,
+            user=prompts.IMAGE_DESC_USER_PROMPT,
+            image_path=image_path
+        )
+        img_desc = self.vlm.run(request)
         
-        prompt = PromptGenerator(img_desc)
-        title = self.llm.run(prompt.title_generation_prompt())
-        summary = self.llm.run(prompt.summary_generation_prompt())
-        keywords = self.llm.run(prompt.keyword_generation_prompt())
-        classification_response = self.llm.run(prompt.classification_prompt())
+        prompt = prompts.PromptGenerator(img_desc)
+        title = self.llm_2.run(prompt.title_generation_prompt())
+        summary = self.llm_2.run(prompt.summary_generation_prompt())
+        keywords = self.llm_1.run(prompt.keyword_generation_prompt())
+        classification_response = self.llm_1.run(prompt.classification_prompt())
 
         results = {
             "id": str(uuid.uuid4()),
@@ -82,9 +100,9 @@ class ProcessImages:
                 continue
             img_desc = self.process_image(image)
             self.db.add_image_description(img_desc)
-          
+
 
 if __name__ == "__main__":
-    process = ProcessImages()
+    process = ProcessImages(local_mode=False)
     process.process()
     print()
