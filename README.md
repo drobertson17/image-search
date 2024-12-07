@@ -13,7 +13,7 @@ For AWS Bedrock:
  2. Login to AWS with SSO: `aws sso login --profile default`
 
 For local models:
- 1. Download the models and place the files in the `/models/` directory. 
+ 1. Download the models and place the files in the `models/` directory. 
     - For the LLM, I used `Llama-3.2-3B-Instruct-Q5_K_S.gguf` from [here](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/tree/main).
     - For the VLM, I used `ggml-model-q4_k.gguf` and `mmproj-model-f16.gguf` from [here](https://huggingface.co/mys/ggml_llava-v1.5-7b/tree/main).
  2. Update the `.env` file to point to the correct files
@@ -29,4 +29,4 @@ With python and poetry installed on the system, run `poetry install` from the re
 
 <h2>Use</h2>
 
-Update and run the `run.py` script in `/scripts/`
+Update and run the `run.py` script in `scripts/`
