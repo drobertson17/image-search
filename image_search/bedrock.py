@@ -7,7 +7,7 @@ from typing import Callable
 import boto3
 from botocore.exceptions import ClientError, UnauthorizedSSOTokenError
 
-from prompts import RequestData
+from image_search.prompts import RequestData
 
 
 @dataclass
@@ -18,21 +18,21 @@ class UseTracker:
 
 
 def llama_text_prompt(system: str, user: str) -> str:
-        return dedent(f"""
-            <|begin_of_text|>
-            <|start_header_id|>system<|end_header_id|>{system}<|eot_id|>
-            <|start_header_id|>user<|end_header_id|>{user}<|eot_id|>
-            <|start_header_id|>assistant<|end_header_id|>
-            """)
+    return dedent(f"""
+        <|begin_of_text|>
+        <|start_header_id|>system<|end_header_id|>{system}<|eot_id|>
+        <|start_header_id|>user<|end_header_id|>{user}<|eot_id|>
+        <|start_header_id|>assistant<|end_header_id|>
+        """)
 
 
 def llama_image_prompt(system: str, user: str) -> str:
-        return dedent(f"""
-            <|begin_of_text|>
-            <|start_header_id|>system<|end_header_id|>{system}<|eot_id|>
-            <|start_header_id|>user<|end_header_id|><|image|>{user}<|eot_id|>
-            <|start_header_id|>assistant<|end_header_id|>
-            """)
+    return dedent(f"""
+        <|begin_of_text|>
+        <|start_header_id|>system<|end_header_id|>{system}<|eot_id|>
+        <|start_header_id|>user<|end_header_id|><|image|>{user}<|eot_id|>
+        <|start_header_id|>assistant<|end_header_id|>
+        """)
 
 
 class BedrockLlama:
@@ -61,7 +61,7 @@ class BedrockLlama:
     def prepare_request(self, request_data: RequestData) -> dict:
         return {}
 
-    def run(self, request_data: dict) -> str:
+    def run(self, request_data: RequestData) -> str:
         request = self.prepare_request(request_data)
 
         try:
@@ -84,7 +84,6 @@ class BedrockLlama:
 
         return model_response["generation"]
     
-
 
 class BedrockLlamaTextLLM(BedrockLlama):
     def __init__(

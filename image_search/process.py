@@ -5,34 +5,56 @@ from dotenv import load_dotenv
 
 from tqdm import tqdm
 
-import prompts
-from bedrock import BedrockLlamaMultiModeVLM, BedrockLlamaTextLLM
-from db import ImageDBService
-from image import ImageProcessor
-from local_models import TextModel, VisionModel
+import image_search.prompts as prompts
+from image_search.schemas import Model
+from image_search.db import ImageDBService
+from image_search.image import ImageProcessor
 
 
 load_dotenv()
 
 
 class ProcessImages:
-    def __init__(self, local_mode: bool = True):
-        self.directory = os.getenv("DIR_TO_PROCESS")
+    def __init__(
+            self,
+            vlm: Model,
+            llm: Model,
+            subdirs: list[str] | str = None,
+        ):
+        self.build_directory_list(subdirs)
         self.db = ImageDBService()
-        if local_mode:
-            self.vlm = VisionModel()
-            self.llm = TextModel()
-        else:
-            self.vlm = BedrockLlamaMultiModeVLM()
-            self.llm = BedrockLlamaTextLLM()
+        self.vlm = vlm
+        self.llm = llm
         self.valid_file_types = ["jpg", "jpeg", "png"]
 
+    def build_directory_list(
+            self,
+            subdirs: list[str] | str
+        ) -> list[str]:
+        
+        root_dir = os.getenv("ROOT_DIR")
+        
+        if subdirs is None:
+            self.directories = [root_dir]
+            return
+        
+        if isinstance(subdirs, str):
+            subdirs = [subdirs]
+
+        self.directories = [os.path.join(root_dir, x) for x in subdirs]
+
     def build_file_list(self):
-        self.files = []
-        for root, _, files in os.walk(self.directory):
+        def process_directory(root, files) -> list[str]:
+            valid_files = []
             for file in files:
                 if file.split(".")[-1].lower() in self.valid_file_types:
-                    self.files.append(os.path.join(root, file))
+                    valid_files.append(os.path.join(root, file))
+            return valid_files
+        
+        self.files = []
+        for directory in self.directories:
+            for root, _, files in os.walk(directory):
+                self.files += process_directory(root, files)
 
     def get_classification(self, llm_response: str) -> str:
         col_mapping = {
@@ -109,9 +131,3 @@ class ProcessImages:
                 continue
             results.update(self.describe_image(vlm_image))
             self.db.add_image_description(results)
-
-
-if __name__ == "__main__":
-    process = ProcessImages(local_mode=False)
-    process.process()
-    print()
