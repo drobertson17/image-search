@@ -1,22 +1,13 @@
 import numpy as np
 import webcolors
 from PIL import Image
+from PIL.ExifTags import TAGS
+from PIL.ImageFile import ImageFile
 from sklearn.cluster import KMeans
 from io import BytesIO
 import base64
+from typing import Any
 
-def prepare_image_for_vlm(image_path: str, pixel_limit: int = 999) -> str:
-    with Image.open(image_path) as img:
-        buffered = BytesIO()
-        width, height = img.size    # in pixels
-        if max(width, height) > pixel_limit:
-            shrink_factor = pixel_limit/max(width, height)
-            img = img.resize((
-                int(img.width * shrink_factor),
-                int(img.height * shrink_factor)
-            ))
-        img.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 def rgb_to_color_name(color):
     # Get a list of all webcolor names
@@ -34,21 +25,70 @@ def rgb_to_color_name(color):
     return color_names[index_of_smallest[0][0]]
 
 
-def get_predominant_color(image_path, n_colors=1, return_name: bool = True):
-    img = Image.open(image_path)
-    img = img.resize((img.width // 10, img.height // 10))
-    img = img.convert('RGB')
-    img_array = np.array(img)
+class ImageProcessor:
+    def __init__(self, image_path: str, vlm_pixel_limit: int = 999):
+        self.path = image_path
+        self.image: ImageFile = Image.open(image_path)
+        self.vlm_pixel_limit = vlm_pixel_limit
 
-    pixels = img_array.reshape(-1, 3)
-    
-    # Perform KMeans clustering to find the most common colors
-    kmeans = KMeans(n_clusters=n_colors)
-    kmeans.fit(pixels)
+    @property
+    def vlm_image(self):
+        buffered = BytesIO()
+        width, height = self.image.size    # in pixels
+        image = self.image.copy()
+        if max(width, height) > self.vlm_pixel_limit:
+            shrink_factor = self.vlm_pixel_limit/max(width, height)
+            image = image.resize((
+                int(image.width * shrink_factor),
+                int(image.height * shrink_factor)
+            ))
+        
+        image.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-    predominant_color = kmeans.cluster_centers_[0]
+    def get_predominant_color(self, n_colors=1, return_name: bool = True):
+        image = self.image.resize((self.image.width // 10, self.image.height // 10))
+        image = image.convert('RGB')
+        image_array = np.array(image)
 
-    if return_name:
-        return rgb_to_color_name(tuple(map(int, predominant_color)))
-    
-    return tuple(map(int, predominant_color))
+        pixels = image_array.reshape(-1, 3)
+        
+        # Perform KMeans clustering to find the most common colors
+        kmeans = KMeans(n_clusters=n_colors)
+        kmeans.fit(pixels)
+
+        predominant_color = kmeans.cluster_centers_[0]
+
+        if return_name:
+            return rgb_to_color_name(tuple(map(int, predominant_color)))
+        
+        return tuple(map(int, predominant_color))
+
+    def _json_serializable_type(self, value: Any):
+        if isinstance(value, (str, int, float)):
+            return value
+        
+        if isinstance(value, tuple):
+            return [float(x) for x in value]
+        
+        try:
+            return float(value)
+        except:
+            return str(value)
+
+
+    @property
+    def exif_data(self) -> dict:
+        exif_data = {}
+        try:
+            image_exif =  self.image.getexif()
+            for key, val in image_exif.items():
+                val = self._json_serializable_type(val)
+                if key in TAGS:
+                    exif_data[TAGS[key]]=val
+                else:
+                    exif_data[key]=val
+        except Exception as e:
+            print(f"Error: {e}")
+
+        return exif_data

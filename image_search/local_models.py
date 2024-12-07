@@ -6,7 +6,6 @@ from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Llava15ChatHandler
 
 from prompts import RequestData
-from image import prepare_image_for_vlm
 
 load_dotenv()
 
@@ -65,7 +64,6 @@ class VisionModel:
         sys.stderr = sys.__stderr__
 
     def run(self, request: RequestData) -> str:
-        img_base64 = prepare_image_for_vlm(request.image_path)
         
         sys.stdout = open(os.devnull, 'w')
         sys.stderr = open(os.devnull, 'w')
@@ -77,7 +75,7 @@ class VisionModel:
                     "role": "user",
                     "content": [
                         {"type" : "text", "text": request.user},
-                        {"type": "image_url", "image_url": f"data:image/jpeg;base64,{img_base64}"} 
+                        {"type": "image_url", "image_url": f"data:image/jpeg;base64,{request.image_b64}"} 
                     ]
                 }
             ]

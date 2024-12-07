@@ -8,7 +8,7 @@ from tqdm import tqdm
 import prompts
 from bedrock import BedrockLlamaMultiModeVLM, BedrockLlamaTextLLM
 from db import ImageDBService
-from image import get_predominant_color
+from image import ImageProcessor
 from local_models import TextModel, VisionModel
 
 
@@ -24,8 +24,7 @@ class ProcessImages:
             self.llm = TextModel()
         else:
             self.vlm = BedrockLlamaMultiModeVLM()
-            self.llm_1 = TextModel()
-            self.llm_2 = BedrockLlamaTextLLM()
+            self.llm = BedrockLlamaTextLLM()
         self.valid_file_types = ["jpg", "jpeg", "png"]
 
     def build_file_list(self):
@@ -53,25 +52,12 @@ class ProcessImages:
             # Positively classified as "no match"
             return col_mapping[match.group(0)]
 
-
     def clean_response(self, response: str) -> str:
         response = response.split(": ")[-1].strip()
         return response.split("\n")[0]
 
-
-    def process_image(self, image_path: str) -> dict:
-        request = prompts.RequestData(
-            system=prompts.IMAGE_DESC_SYSTEM_PROMPT,
-            user=prompts.IMAGE_DESC_USER_PROMPT,
-            image_path=image_path
-        )
-        img_desc = self.vlm.run(request)
-        
-        prompt = prompts.PromptGenerator(img_desc)
-        title = self.llm_2.run(prompt.title_generation_prompt())
-        summary = self.llm_2.run(prompt.summary_generation_prompt())
-        keywords = self.llm_1.run(prompt.keyword_generation_prompt())
-        classification_response = self.llm_1.run(prompt.classification_prompt())
+    def process_image(self, image_path: str) -> tuple[dict, str]:
+        img = ImageProcessor(image_path)
 
         results = {
             "id": str(uuid.uuid4()),
@@ -79,15 +65,33 @@ class ProcessImages:
             "base_dir": "/".join(image_path.split("/")[:-1]),
             "file_name": image_path.split("/")[-1],
             "file_type": image_path.split(".")[-1],
-            "long_desc": img_desc,
-            "short_desc": self.clean_response(summary),
-            "keywords": self.clean_response(keywords),
-            "image_classification": self.clean_response(keywords).split(",")[0],
-            "title": self.clean_response(title),
-            "predominant_color": get_predominant_color(image_path),
+            "predominant_color": img.get_predominant_color(),
+            "exif_data": img.exif_data
         }
 
-        classification = self.get_classification(classification_response)
+        return results, img.vlm_image
+    
+    def describe_image(self, vlm_image: str) -> dict:
+        request = prompts.RequestData(
+            system=prompts.IMAGE_DESC_SYSTEM_PROMPT,
+            user=prompts.IMAGE_DESC_USER_PROMPT,
+            image_b64=vlm_image
+        )
+        img_desc = self.vlm.run(request)
+        
+        summary_prompt = prompts.summarize_description_prompt(img_desc)
+        summary_response = self.llm.run(summary_prompt)
+        summary = prompts.post_process_summary(summary_response)
+
+        results = {
+            "long_desc": img_desc,
+            "short_desc": summary["summary"],
+            "keywords": summary["keywords"],
+            "image_classification": summary["keywords"].split(",")[0],
+            "title": summary["title"],
+        }
+
+        classification = self.get_classification(summary["classification"])
         if classification is not None:
             results[classification] = True
 
@@ -98,8 +102,13 @@ class ProcessImages:
         for image in tqdm(self.files):
             if self.db.image_exists(image):
                 continue
-            img_desc = self.process_image(image)
-            self.db.add_image_description(img_desc)
+            try:
+                results, vlm_image = self.process_image(image)
+            except:
+                print(f"skipping: {image}")
+                continue
+            results.update(self.describe_image(vlm_image))
+            self.db.add_image_description(results)
 
 
 if __name__ == "__main__":

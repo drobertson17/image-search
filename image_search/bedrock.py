@@ -1,12 +1,12 @@
 import json
 import logging
 from dataclasses import dataclass
+from textwrap import dedent
 from typing import Callable
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, UnauthorizedSSOTokenError
 
-from image import prepare_image_for_vlm
 from prompts import RequestData
 
 
@@ -18,21 +18,21 @@ class UseTracker:
 
 
 def llama_text_prompt(system: str, user: str) -> str:
-        return f"""
+        return dedent(f"""
             <|begin_of_text|>
             <|start_header_id|>system<|end_header_id|>{system}<|eot_id|>
             <|start_header_id|>user<|end_header_id|>{user}<|eot_id|>
             <|start_header_id|>assistant<|end_header_id|>
-            """
+            """)
 
 
 def llama_image_prompt(system: str, user: str) -> str:
-        return f"""
+        return dedent(f"""
             <|begin_of_text|>
             <|start_header_id|>system<|end_header_id|>{system}<|eot_id|>
             <|start_header_id|>user<|end_header_id|><|image|>{user}<|eot_id|>
             <|start_header_id|>assistant<|end_header_id|>
-            """
+            """)
 
 
 class BedrockLlama:
@@ -70,6 +70,9 @@ class BedrockLlama:
                 modelId=self.model_id, body=request
             )
 
+        except UnauthorizedSSOTokenError:
+             raise Exception("Expired Token.")
+    
         except (ClientError, Exception) as e:
             self.logger.error(
                 f"ERROR: Can't invoke '{self.model_id}'. Reason: {e}"
@@ -86,7 +89,7 @@ class BedrockLlama:
 class BedrockLlamaTextLLM(BedrockLlama):
     def __init__(
             self,
-            model_id: str = "us.meta.llama3-2-3b-instruct-v1:0",
+            model_id: str = "us.meta.llama3-2-11b-instruct-v1:0",
             prompt_fcn: Callable[[str, str], str] = llama_text_prompt,
             cost_per_token: float = 0.00015/1000,
             logger_name: str = "llama_text",
@@ -134,7 +137,7 @@ class BedrockLlamaMultiModeVLM(BedrockLlama):
             ),
             "max_gen_len": 512,
             "temperature": 0.5,
-            "images": [prepare_image_for_vlm(request_data.image_path)],
+            "images": [request_data.image_b64],
         }
 
         return json.dumps(native_request)

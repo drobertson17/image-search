@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 from sqlalchemy import create_engine, insert, exists
-from sqlalchemy import Column, String, Boolean
+from sqlalchemy import Column, String, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -31,6 +31,7 @@ class ImageDescription(Base):
     selfie = Column(Boolean, default=False)
     friends_or_family = Column(Boolean, default=False)
     ignore = Column(Boolean, default=False)
+    exif_data = Column(JSON)
 
 
 # Create all tables in the engine
@@ -56,3 +57,17 @@ class ImageDBService:
             q = insert(ImageDescription).values(img_desc)
             self.db.execute(q)
             self.db.commit()
+
+    def get_rows(self) -> list[ImageDescription]:
+        all_rows = self.db.query(ImageDescription).all()
+        
+        rows = []
+        for row in all_rows:
+            rows.append(row)
+        
+        return rows
+
+    def update_description(self, id: str, img_desc: dict):
+        self.db.query(ImageDescription).filter(ImageDescription.id == id).update(img_desc)
+        self.db.commit()
+    

@@ -17,6 +17,7 @@ psycopg2 = "^2.9.10"
 scikit-learn = "^1.5.2"
 webcolors = "^24.11.1"
 boto3 = "^1.35.70"
+rapidfuzz = "^3.10.1"
 
 
 [tool.poetry.group.dev.dependencies]
